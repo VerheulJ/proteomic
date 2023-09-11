@@ -1,0 +1,474 @@
+#analizo 3xtg vs todos los controles para las proteínas comunes
+
+
+library(readxl)
+library(data.table)
+#library(ggpubr)
+library(readr)
+library(stats)
+library(formattable)
+library(dplyr)
+library(car)
+library(ggplot2)
+library(ggrepel)
+library(xlsx)
+library(openxlsx)
+options(scipen = 999)
+
+##############################################################################
+###############################3TG##########################################
+##############################################################################
+##############################################################################
+
+entera_3TG <- read_excel("proteomica/ejercicio/3-TG/230414-LFQ_Filtradas.xlsx")
+
+accesion_3TG<-select(entera_3TG, Accession)
+gene_ID_3TG<-select(entera_3TG, "Gene Symbol")
+df_3TG<-entera_3TG
+abundancias_3TG<-df_3TG[,140:158]
+abundancias_3TG[is.na(abundancias_3TG)] <- 0
+colnam<-colnames(abundancias_3TG)
+colnam <- gsub(".*F(\\d+).*", "\\1", colnam)
+colnam <- paste("F", gsub("\\D+", "", colnam), sep = "")
+colnam <- paste(colnam, "_3TG", sep = "")
+colnames(abundancias_3TG) <- colnam
+df_3TG<-cbind(accesion_3TG, gene_ID_3TG, abundancias_3TG)
+
+sample_metadata_3TG <- read_delim("proteomica/ejercicio/3-TG/sample-metadata-3TG.csv", 
+                                  delim = "\t", escape_double = FALSE, 
+                                  trim_ws = TRUE)
+colnam<-data_frame(colnam)
+colnames(colnam)[1]<-"sample-id"
+
+sample_metadata_3TG<- cbind(colnam, sample_metadata_3TG[,-1])
+
+prot_control_3TG <- sample_metadata_3TG %>%
+  filter(experiment == "WT") %>%
+  pull("sample-id")
+
+tabla_control_3TG <- df_3TG%>%
+  select(1, 2, all_of(prot_control_3TG))
+
+##############################################################################
+###############################5XFAD###########################################
+##############################################################################
+##############################################################################
+
+entera_5XFAD <- read_excel("proteomica/ejercicio/5XFAD/230223-LFQ_Incl-Isoforms_FILTRADAS.xlsx")
+df_5XFAD<-entera_5XFAD
+
+accesion_5XFAD<-select(entera_5XFAD, Accession)
+gene_ID_5XFAD<-select(entera_5XFAD, "Gene Symbol")
+abundancias_5XFAD<-df_5XFAD[,120:134]
+abundancias_5XFAD[is.na(abundancias_5XFAD)]<-0
+colnam<-colnames(abundancias_5XFAD)
+colnam <- gsub(".*F(\\d+).*", "\\1", colnam)
+colnam <- paste("F", gsub("\\D+", "", colnam), sep = "")
+colnam <- paste(colnam, "_5XFAD", sep = "")
+colnames(abundancias_5XFAD) <- colnam
+
+#crear el df y transponerla y modificar el nombre de las columnas y ponerlo en notacion cientifica
+df_5XFAD<-cbind(accesion_5XFAD, gene_ID_5XFAD, abundancias_5XFAD)
+
+sample_metadata_5XFAD <- read_delim("proteomica/ejercicio/5XFAD/sample-metadata-5XFAD.csv", 
+                                    delim = "\t", escape_double = FALSE, 
+                                    trim_ws = TRUE)
+colnam<-data_frame(colnam)
+colnames(colnam)<-"sample-id"
+
+sample_metadata_5XFAD<- cbind(colnam, sample_metadata_5XFAD[,-1])
+
+prot_control_5XFAD <- sample_metadata_5XFAD %>%
+  filter(experiment == "WT") %>%
+  pull("sample-id")
+
+tabla_control_5XFAD <- df_5XFAD %>%
+  select(1, 2, all_of(prot_control_5XFAD))
+
+##############################################################################
+###############################5XFAD###########################################
+##############################################################################
+##############################################################################
+
+
+# Obtener las columnas de interés
+columna_3TG <- tabla_control_3TG$Accession
+columna_5XFAD <- tabla_control_5XFAD$Accession
+
+
+# Encontrar los elementos comunes
+elementos_comunes <- intersect(columna_3TG, columna_5XFAD)
+
+# Crear un nuevo dataframe con los elementos comunes
+comunes_df <- data.frame(comunes = elementos_comunes)
+
+# Mostrar el dataframe de elementos comunes
+print(comunes_df)
+
+
+columna_3TG<-data_frame(columna_3TG)
+columna_5XFAD<-data_frame(columna_5XFAD)
+
+filas_unicas_3TG <- columna_3TG[!(columna_3TG$columna_3TG %in% columna_5XFAD$columna_5XFAD), , drop = FALSE]
+
+# Filas únicas en columna_5XFAD que no están en columna_3TG
+filas_unicas_5XFAD <- columna_5XFAD[!(columna_5XFAD$columna_5XFAD %in% columna_3TG$columna_3TG), , drop = FALSE]
+
+nuevo_dataframe <- tabla_control_3TG[tabla_control_3TG$Accession %in% comunes_df$comunes, ]
+comunes_control_3TG<-nuevo_dataframe
+
+comunes_control_5XFAD<-tabla_control_5XFAD[tabla_control_5XFAD$Accession %in% comunes_df$comunes, ]
+
+comunes_control_3TG[is.na(comunes_control_3TG)]<- 0
+comunes_control_5XFAD[is.na(comunes_control_5XFAD)]<-0
+
+comunes_control_3TG<-comunes_control_3TG[order(comunes_control_3TG$Accession),]
+comunes_control_5XFAD<-comunes_control_5XFAD[order(comunes_control_5XFAD$Accession),]
+new_index <- 1:nrow(comunes_control_3TG)
+rownames(comunes_control_3TG) <- new_index
+rownames(comunes_control_5XFAD) <- new_index
+
+comunes_controles<-cbind(comunes_control_3TG, comunes_control_5XFAD[,-(1:2)])
+
+##############################################################################
+###############################····###########################################
+##############################################################################
+##############################################################################
+
+sumas <- rowSums(comunes_controles[,-(1:2)])
+suma_controles <- data.frame(Suma = sumas)
+a <- ncol(comunes_controles)
+a <- a - 2
+media_controles <- suma_controles / a
+
+
+
+##############################################################################
+###############################····###########################################
+##############################################################################
+##############################################################################
+##############################################################################
+###############################····###########################################
+##############################################################################
+##############################################################################
+##############################################################################
+###############################····###########################################
+##############################################################################
+##############################################################################
+
+prot_experimento_5XFAD <- sample_metadata_5XFAD %>%
+  filter(experiment == "5XFAD") %>%
+  pull("sample-id")
+
+tabla_experimento_5XFAD <- df_5XFAD %>%
+  select(1, 2, all_of(prot_experimento_5XFAD))
+
+
+prot_experimento_3TG <- sample_metadata_3TG %>%
+  filter(experiment == "3xTg") %>%
+  pull("sample-id")
+
+tabla_experimento_3TG <- df_3TG %>%
+  select(1, 2, all_of(prot_experimento_3TG))
+
+
+
+
+# Creamos dataframe que contenga las abundancias de proteínas comunes entre ambos modelos 
+#y preparo las tablas para cda modeo ara oder compararlo con los controles
+
+columna_3TG <- tabla_control_3TG$Accession
+columna_experimento_5XFAD <- tabla_experimento_5XFAD$Accession
+elementos_comunes <- intersect(columna_3TG, columna_experimento_5XFAD)
+comunes_df <- data.frame(comunes = elementos_comunes)
+comunes_experimento_5XFAD <- tabla_experimento_5XFAD[tabla_experimento_5XFAD$Accession %in% comunes_df$comunes, ]
+
+#mismo para 5XFAD
+comunes_experimento_3TG<- tabla_experimento_3TG[tabla_experimento_3TG$Accession %in% comunes_df$comunes, ]
+
+
+#ordenamos alfabeticamente y ordenamos indice
+
+comunes_experimento_3TG<-comunes_experimento_3TG[order(comunes_experimento_3TG$Accession),]
+comunes_experimento_5XFAD<-comunes_experimento_5XFAD[order(comunes_experimento_5XFAD$Accession),]
+new_index <- 1:nrow(comunes_experimento_3TG)
+rownames(comunes_experimento_3TG) <- new_index
+rownames(comunes_experimento_5XFAD) <- new_index
+
+###############################····###########################################
+##############################################################################
+##############################################################################
+#3TG
+###############################····###########################################
+##############################################################################
+##############################################################################
+#Vamos a normalizar los datos respecto a los controles
+
+
+# Inicializar un dataframe vacío para almacenar los resultados
+comunes_experimento_3TG_normalizado_numeros <- data.frame(matrix(ncol = ncol(comunes_experimento_3TG) - (2), nrow = nrow(comunes_experimento_3TG)))
+# Copiar los nombres de las columnas del dataframe original
+
+colnames(comunes_experimento_3TG_normalizado_numeros) <- colnames(comunes_experimento_3TG[-(1:2)])
+
+# Realizar la división fila a fila y columna a columna
+for (i in 1:nrow(comunes_experimento_3TG[,-(1:2)])) {
+  fila <- comunes_experimento_3TG[i,-(1:2)]
+  for (j in 1:(ncol(comunes_experimento_3TG[,-(1:2)]))) {
+    resultado <- fila[j] / media_controles[i, 1]
+    comunes_experimento_3TG_normalizado_numeros[i, j] <- resultado
+  }
+}
+comunes_experimento_3TG_normalizado<-cbind(comunes_experimento_3TG[,(1:2)], comunes_experimento_3TG_normalizado_numeros)
+
+
+###############################5XFAD·###########################################
+##############################################################################
+##############################################################################
+
+# Inicializar un dataframe vacío para almacenar los resultados
+comunes_experimento_5XFAD_normalizado_numeros <- data.frame(matrix(ncol = ncol(comunes_experimento_5XFAD) - (2), nrow = nrow(comunes_experimento_5XFAD)))
+
+colnames(comunes_experimento_5XFAD_normalizado_numeros) <- colnames(comunes_experimento_5XFAD[-(1:2)])
+
+# Realizar la división fila a fila y columna a columna
+for (i in 1:nrow(comunes_experimento_5XFAD[,-(1:2)])) {
+  fila <- comunes_experimento_5XFAD[i,-(1:2)]
+  for (j in 1:(ncol(comunes_experimento_5XFAD[,-(1:2)]))) {
+    resultado <- fila[j] / media_controles[i, 1]
+    comunes_experimento_5XFAD_normalizado_numeros[i, j] <- resultado
+  }
+}
+
+comunes_experimento_5XFAD_normalizado<-cbind(comunes_experimento_5XFAD[,(1:2)], comunes_experimento_5XFAD_normalizado_numeros)
+
+
+
+###############################····###########################################
+##############################################################################
+##############################################################################
+#normalizar datos controles
+###############################····###########################################
+##############################################################################
+##############################################################################
+
+
+# Inicializar un dataframe vacío para almacenar los resultados
+comunes_controles_normalizado_numeros <- data.frame(matrix(ncol = ncol(comunes_controles) - (2), nrow = nrow(comunes_controles)))
+# Copiar los nombres de las columnas del dataframe original
+
+colnames(comunes_controles_normalizado_numeros) <- colnames(comunes_controles[-(1:2)])
+
+
+
+# Realizar la división fila a fila y columna a columna
+for (i in 1:nrow(comunes_controles[,-(1:2)])) {
+  fila <- comunes_controles[i,-(1:2)]
+  for (j in 1:(ncol(comunes_controles[,-(1:2)]))) {
+    resultado <- fila[j] / media_controles[i, 1]
+    comunes_controles_normalizado_numeros[i, j] <- resultado
+  }
+}
+comunes_controles_normalizado<-cbind(comunes_controles[,(1:2)], comunes_controles_normalizado_numeros)
+###############################····###########################################
+##############################################################################
+##############################################################################
+#calcular normalidad
+#Calcular normalidad en ambos y ver cuantos la cumplen
+#resultado del número de proteinas que no siguen normalifad
+###############################····###########################################
+##############################################################################
+##############################################################################
+
+
+
+#Calcular normalidad en ambos y ver cuantos la cumplen
+#resultado del número de proteinas que no siguen normalifad
+c <- vector()
+for (i in 1:nrow(comunes_experimento_3TG_normalizado_numeros)) {
+  fila <- as.numeric(comunes_experimento_3TG_normalizado_numeros[i, ])
+  resultado <- shapiro.test(fila)
+  c[i] <- resultado$p.value
+}
+num_valores_menor_0_05 <- sum(c < 0.05)
+
+print(num_valores_menor_0_05)
+
+d <- vector()
+for (i in 1:nrow(comunes_controles_normalizado_numeros)) {
+  fila <- as.numeric(comunes_controles_normalizado_numeros[i, ])
+  resultado <- shapiro.test(fila)
+  d[i] <- resultado$p.value
+}
+num_valores_menor_0_05 <- sum(d < 0.05)
+
+print(num_valores_menor_0_05)
+
+
+#T-student 
+
+p_valor_controles <- c()
+for (i in 1:nrow(comunes_experimento_3TG_normalizado_numeros)) {
+  valores_3TG<- as.numeric(comunes_experimento_3TG_normalizado_numeros[i, ])
+  valores_controles <- as.numeric(comunes_controles_normalizado_numeros[i, ])
+  resultado_t_test <- t.test(valores_3TG, valores_controles)
+  p_valor_controles<-c(p_valor_controles, resultado_t_test$p.value)
+}
+resultado_final_test<-data.frame(comunes_experimento_3TG[,1], p_value = p_valor_controles)
+
+num_valores_menor_0_05 <- sum(resultado_final_test[,2] < 0.05)
+
+print(num_valores_menor_0_05)
+
+#Calcular media y desviaciones típicas
+
+sumas <- rowSums(comunes_controles_normalizado_numeros[,-(1:2)])
+suma_controles_n <- data.frame(Suma = sumas)
+a<-ncol(comunes_controles)
+a<-a-2
+media_controles_n<-(suma_controles_n/a)
+
+sumas <- rowSums(comunes_experimento_3TG_normalizado_numeros[,-(1:2)])
+suma_3TG_n <- data.frame(Suma = sumas)
+b<-ncol(comunes_experimento_3TG)
+b<-b-2
+media_3TG_n<-(suma_3TG_n/b)
+
+
+
+cociente<-media_3TG_n/media_controles_n
+log2cociente<-apply(cociente, 1, log2)
+log2cociente<-data_frame(log2cociente)
+
+p_valor_controles<-data_frame(p_valor_controles)
+log10pvalor<-apply(p_valor_controles, 1, log10)
+log10pvalor<-data_frame(log10pvalor)
+log10pvalor<-apply(log10pvalor, 1, function(x) -x)
+log10pvalor<-data_frame(log10pvalor)
+
+
+vulcanot<-data_frame(comunes_control_3TG[,1:2], log2cociente, log10pvalor)
+
+
+# ggplot(vulcanot, aes(x = log2cociente, y = log10pvalor)) +
+#   geom_point() +
+#   geom_vline(xintercept = -1, linetype = "dashed", color = "green") +
+#   geom_vline(xintercept = 1, linetype = "dashed", color = "green") +
+#   geom_hline(yintercept = 1.9999999999999996, linetype = "dashed", color = "red") +  
+#   labs(
+#     title = "Vulcano plot 3TG/controles",
+#     x = "Log2 Fold Change",
+#     y = "-log10(P-Value)"
+#   )
+
+########################################################################################################################
+########################################################################################################################
+#######################################################################################################################
+#voy a coger las 12 desreguladas según las x/y, extrayendola de los datos 
+#######################################################################################################################
+#########################################################################################################################
+#########################################################################################################################
+p_valor001<-1.9999999999999996
+
+
+vulcanot_etiquetas<- vulcanot %>% filter(log2cociente < -1 | log2cociente > 1)
+vulcanot_etiquetas<- vulcanot_etiquetas %>% filter(log10pvalor>p_valor001)
+top_rows <- vulcanot_etiquetas %>%
+  arrange(desc(log10pvalor)) %>%  # Ordenar el DataFrame por 'log10pvalor' en orden descendente
+  head(3)                         # Seleccionar las primeras tres filas
+
+
+
+
+# Obtener los valores de la columna 'Accesion' de las tres filas
+sobreexpresadas_evidentes_accesion <- top_rows$Accession
+
+# mas altos subrexpresados
+
+high_negative_rows <- vulcanot_etiquetas %>%
+  filter(log2cociente < -1) %>%   # Filtrar filas con 'log2cociente' negativo
+  arrange(desc(log10pvalor)) %>%  # Ordenar el DataFrame resultante por 'log10pvalor' en orden descendente
+  head(3)                         # Seleccionar las primeras tres filas
+
+# Obtener los valores de la columna 'Accesion' de las tres filas
+subrrepresentadas_evidentes_accesion <- high_negative_rows$Accession
+
+vulcanot_etiquetas_evidente<- vulcanot_etiquetas  %>% filter(log10pvalor>p_valor001)
+
+far_rows <- vulcanot_etiquetas_evidente %>%
+  arrange(desc(log2cociente)) %>%  # Ordenar el DataFrame por 'log10pvalor' en orden descendente
+  head(3)                         # Seleccionar las primeras tres filas
+
+# Obtener los valores de la columna 'Accesion' de las tres filas
+mas_sobreexpresadas_accesion <- far_rows$Accession
+
+
+
+# Obtener los tres valores máximos de 'log10pvalor' para filas con 'log2cociente' negativo
+far_negative_rows <- vulcanot_etiquetas %>%
+  filter(log2cociente < (-1) & log10pvalor > p_valor001) %>%   # Filtrar filas con 'log2cociente' negativo
+  arrange(log2cociente) %>%  # Ordenar el DataFrame resultante por 'log10pvalor' en orden descendente
+  head(3)                         # Seleccionar las primeras tres filas
+
+mas_subrrepresentadas_accesion <- far_negative_rows$Accession
+
+accession_values <- c(mas_sobreexpresadas_accesion, mas_subrrepresentadas_accesion, 
+                      subrrepresentadas_evidentes_accesion, sobreexpresadas_evidentes_accesion)
+accession_values <- data.frame("Accession" = accession_values)
+subset_desrreguladas<- subset(vulcanot, Accession %in% accession_values$Accession)
+
+########################################################################################################################
+########################################################################################################################
+#######################################################################################################################
+########################################################################################################################
+########################################################################################################################
+#######################################################################################################################
+########################################################################################################################
+########################################################################################################################
+#######################################################################################################################
+p_valor001<-1.9999999999999996
+sobrexpresadas<-filter(vulcanot, log2cociente>1 & log10pvalor>p_valor001)
+subexpresadas<-filter(vulcanot, log2cociente<(-1) & log10pvalor>p_valor001)
+resto<-anti_join(vulcanot, sobrexpresadas) %>% anti_join(subexpresadas)
+sobrexpresadas$estado<-"Sobrexpresado"
+subexpresadas$estado<-"Subexpresado"
+
+# Crear el gráfico de tipo volcán con ggplot2
+#Crear el gráfico de tipo volcán con ggplot2
+ggplot() +
+  geom_point(data = sobrexpresadas, aes(x = log2cociente, y = log10pvalor, color=estado), size = 0.5)+
+  geom_point(data = subexpresadas, aes(x = log2cociente, y = log10pvalor, color=estado), size = 0.5)+
+  geom_point(data = resto, aes(x = log2cociente, y = log10pvalor), color= "grey", size = 0.5)+
+  
+  geom_vline(xintercept = -1, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "black") +
+  
+  geom_hline(yintercept = 1.9999999999999996, linetype = "dashed", color = "black") +
+  
+  geom_label_repel(data = subset_desrreguladas,
+                   aes(x = log2cociente, y = log10pvalor, label = `Gene Symbol`),
+                   color = "black", box.padding = 0.5, point.padding = 0.3,
+                   force = 10, nudge_x = 0.00000001, nudge_y = 0.00000001)  +
+  
+  
+  
+  labs(
+    title = "Vulcano plot 3XTG/controles",
+    x = bquote(log[2](Fold_Change)),
+    y =  bquote(-log[10](pvalue)),
+    color = "Estado"
+  ) +
+  scale_color_manual(values = c("Sobrexpresado" = "lightsalmon", "Subexpresado" = "cadetblue3")) +
+  
+  theme(panel.background = element_rect(fill = "white"),
+        axis.line = element_line(color = "black"),  # Color de las líneas de los ejes
+        axis.text = element_text(color = "black"),  # Color del texto de los ejes
+        axis.title = element_text(color = "black")  # Color de los títulos de los ejes
+  )
+# 
+# write.xlsx(sobrexpresadas, "proteomica/ejercicio/3-TG/sobrexpresadas.xlsx", sheetName = "sobrexpresadas", rowNames = FALSE, append = FALSE)
+# 
+# write.xlsx(subexpresadas, "proteomica/ejercicio/3-TG/subexpresadas.xlsx", sheetName = "subexpresadas", rowNames = FALSE, append = FALSE)
+# 
+# 
+# 
