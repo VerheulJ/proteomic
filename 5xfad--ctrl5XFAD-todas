@@ -1,3 +1,6 @@
+
+#Analizo el modelo 5xfad normalizando respecto a sus controles de todas las proteínas del modelo no solo las comunes
+
 library(readxl)
 library(data.table)
 #library(ggpubr)
