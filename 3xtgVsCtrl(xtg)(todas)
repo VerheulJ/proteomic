@@ -1,6 +1,4 @@
 
-#analizo 3xtg y normalizo respecto a solo sus controles para el total de proteínas del modelo
-
 library(readxl)
 library(data.table)
 #library(ggpubr)
@@ -17,8 +15,13 @@ options(scipen = 999)
 
 
 
+
 entera_3TG <- read_excel("proteomica/ejercicio/3-TG/230414-LFQ_Filtradas.xlsx")
 
+
+
+#cojo la tabla grande y la modifico para quedarme solo con el nombre del gen y el código de acceso, adicionalmente añado un subfijo a la tabla para poder
+#tablar cómodamente cuando utilice las tablas con el otro modelo 
 accesion_3TG<-select(entera_3TG, Accession)
 gene_ID_3TG<-select(entera_3TG, "Gene Symbol")
 df_3TG<-entera_3TG
@@ -31,22 +34,42 @@ colnam <- paste(colnam, "_3TG", sep = "")
 colnames(abundancias_3TG) <- colnam
 df_3TG<-cbind(accesion_3TG, gene_ID_3TG, abundancias_3TG)
 
+#uno las columnas que he seleccionado creando df_3TG que es el dataframe más importante
+
+df_3TG<-cbind(accesion_3TG, gene_ID_3TG, abundancias_3TG)
+
+#voy a borrar las líneas vacías que me dan errores luego
+
+
+# # Calcular la suma de las columnas en el dataframe de control
+# media_total <- rowSums(df_3TG[, -(1:2)])
+# # Calcular la media de control y borrar las que tengan media 0 porque es un error
+# filas_con_media_cero <- which(media_total == 0)
+# df_3TG <- df_3TG[-filas_con_media_cero, ]
+# rownames(df_3TG) <- NULL
+
+
+
+#añado los metadatos 
 sample_metadata_3TG <- read_delim("proteomica/ejercicio/3-TG/sample-metadata-3TG.csv", 
                                   delim = "\t", escape_double = FALSE, 
                                   trim_ws = TRUE)
+
 colnam<-data_frame(colnam)
-colnames(colnam)[1]<-"sample-id"
 colnames(colnam)<-"sample-id"
 
+#modifico la tabla de los mentadatos para que tenga el mismo subfijo que tienen los nombres de las columnas del dataframe principal
+# para que puedan encontrarse sin problema 
 sample_metadata_3TG<- cbind(colnam, sample_metadata_3TG[,-1])
 
+
+# creo las tablas con los grupos experimentales y controles por separado 
 prot_control_3TG <- sample_metadata_3TG %>%
   filter(experiment == "WT") %>%
   pull("sample-id")
 
 tabla_control_3TG <- df_3TG %>%
   select(1, 2, all_of(prot_control_3TG))
-
 
 prot_experimento_3TG <- sample_metadata_3TG %>%
   filter(experiment == "3xTg") %>%
@@ -56,165 +79,87 @@ tabla_experimento_3TG <- df_3TG %>%
   select(1, 2, all_of(prot_experimento_3TG))
 
 
+tabla_experimento_3TG <- tabla_experimento_3TG %>%
+  arrange(Accession)
+tabla_control_3TG <- tabla_control_3TG %>%
+  arrange(Accession)
 
 
-sumas <- rowSums(tabla_control_3TG[,-(1:2)])
-suma_controles <- data.frame(Suma = sumas)
-a <- ncol(tabla_control_3TG)
-a <- a - 2
-media_controles <- suma_controles / a
-epsilon <-1e-8
-media_controles[media_controles == 0]<-epsilon
-
-#ordenamos alfabeticamente y ordenamos indice
-tabla_experimento_3TG<-tabla_experimento_3TG[order(tabla_experimento_3TG$Accession),]
-new_index <- 1:nrow(tabla_experimento_3TG)
-rownames(tabla_experimento_3TG) <- new_index
-
-##############################################################################
-###############################····###########################################
-##############################################################################
+ncontrol<-ncol(tabla_control_3TG) - 2
+nexp<-ncol(tabla_experimento_3TG) - 2
+ind <- tabla_experimento_3TG[,(1:2)]
 
 
+# Calcular la suma de las columnas en el dataframe de control
+tabla_control_3TG_datos<-tabla_control_3TG
+tabla_control_3TG_datos$suma<-rowSums(tabla_control_3TG[, -(1:2)])
+tabla_control_3TG_datos$media<- tabla_control_3TG_datos$suma / ncontrol
 
-
-
-# Inicializar un dataframe vacío para almacenar los resultados
-tabla_control_3TG_normalizado_numeros <- data.frame(matrix(ncol = ncol(tabla_control_3TG) - (2), nrow = nrow(tabla_control_3TG)))
-# Copiar los nombres de las columnas del dataframe original
-
-colnames(tabla_control_3TG_normalizado_numeros) <- colnames(tabla_control_3TG[-(1:2)])
+tabla_experimento_3TG_datos<-tabla_experimento_3TG
+tabla_experimento_3TG_datos$suma<-rowSums(tabla_experimento_3TG[, -(1:2)])
+tabla_experimento_3TG_datos$media<- tabla_experimento_3TG_datos$suma / nexp
 
 
 
-# Realizar la división fila a fila y columna a columna
-for (i in 1:nrow(tabla_control_3TG[,-(1:2)])) {
-  fila <- tabla_control_3TG[i,-(1:2)]
-  for (j in 1:(ncol(tabla_control_3TG[,-(1:2)]))) {
-    resultado <- fila[j] / media_controles[i, 1]
-    tabla_control_3TG_normalizado_numeros[i, j] <- resultado
-  }
+# normalizar los datos del experimento 
+tabla_experimento_3TG_normalizado_numeros <- tabla_experimento_3TG[, -(1:2)] / tabla_control_3TG_datos$media
+# Asignar nombres de columna
+colnames(tabla_experimento_3TG_normalizado_numeros) <- colnames(tabla_experimento_3TG[, -(1:2)])
+tabla_experimento_3TG_normalizado<-cbind(ind, tabla_experimento_3TG_normalizado_numeros)
+
+#normalizar los datos de los controles
+
+tabla_control_3TG_normalizado_numeros<-tabla_control_3TG[,-(1:2)] / tabla_control_3TG_datos$media
+tabla_control_3TG_normalizado<-cbind(ind,tabla_control_3TG_normalizado_numeros)
+
+
+#calcular la media de los datos normalizados
+# Calcular la suma de las columnas en el dataframe de control
+tabla_control_3TG_datos_n<-tabla_control_3TG_normalizado_numeros
+tabla_control_3TG_datos_n$suma<-rowSums(tabla_control_3TG_normalizado_numeros)
+tabla_control_3TG_datos_n$media<- tabla_control_3TG_datos_n$suma / ncontrol
+
+tabla_experimento_3TG_datos_n<-tabla_experimento_3TG_normalizado_numeros
+tabla_experimento_3TG_datos_n$suma<-rowSums(tabla_experimento_3TG_normalizado_numeros)
+tabla_experimento_3TG_datos_n$media<- tabla_experimento_3TG_datos_n$suma / nexp
+
+
+#calcular las inferencias estadística
+
+p_valor_test <- c()
+for (i in 1:nrow(tabla_control_3TG_normalizado_numeros)){
+  valores_3TG<-as.numeric(tabla_experimento_3TG_normalizado_numeros[i,])
+  valores_control<-as.numeric(tabla_control_3TG_normalizado_numeros[i,])
+  resultado_t_test<-t.test(valores_control, valores_3TG)
+  p_valor_test<-c(p_valor_test, resultado_t_test$p.value)
+  
 }
 
-tabla_control_3TG_normalizado<-cbind(tabla_control_3TG[,(1:2)], tabla_control_3TG_normalizado_numeros)
-
-
-###############################3TG·###########################################
-##############################################################################
-##############################################################################
-
-# Inicializar un dataframe vacío para almacenar los resultados
-tabla_experimento_3TG_normalizado_numeros <- data.frame(matrix(ncol = ncol(tabla_experimento_3TG) - (2), nrow = nrow(tabla_experimento_3TG)))
-
-colnames(tabla_experimento_3TG_normalizado_numeros) <- colnames(tabla_experimento_3TG[-(1:2)])
-
-# Realizar la división fila a fila y columna a columna
-for (i in 1:nrow(tabla_experimento_3TG[,-(1:2)])) {
-  fila <- tabla_experimento_3TG[i,-(1:2)]
-  for (j in 1:(ncol(tabla_experimento_3TG[,-(1:2)]))) {
-    resultado <- fila[j] / media_controles[i, 1]
-    tabla_experimento_3TG_normalizado_numeros[i, j] <- resultado
-  }
-}
+df_3TG_datos<-df_3TG
+df_3TG_datos$p.valor<-p_valor_test
+df_3TG_datos$media<-rowSums(df_3TG[,-(1:2)])/ ( nexp + ncontrol)
+resultado_final_test<-data.frame(tabla_experimento_3TG[,1], p_value = p_valor_test)
+num_valores_menor_0_05 <- sum(resultado_final_test[,2] < 0.01)
 
 
 
-tabla_experimento_3TG_normalizado<-cbind(tabla_experimento_3TG[,(1:2)], tabla_experimento_3TG_normalizado_numeros)
-
-
-###############################····###########################################
-##############################################################################
-##############################################################################
-#####################################################
-
-# 
-# #Calcular normalidad en ambos y ver cuantos la cumplen
-# #resultado del número de proteinas que no siguen normalifad
-# c <- vector()
-# for (i in 1:nrow(tabla_experimento_3TG_normalizado_numeros)) {
-#   fila <- as.numeric(tabla_experimento_3TG_normalizado_numeros[i, ])
-#   resultado <- shapiro.test(fila)
-#   c[i] <- resultado$p.value
-# }
-# num_valores_menor_0_05 <- sum(c < 0.05)
-# 
-# print(num_valores_menor_0_05)
-# 
-# d <- vector()
-# for (i in 1:nrow(tabla_control_3TG_normalizado_numeros)) {
-#   fila <- as.numeric(tabla_control_3TG_normalizado_numeros[i, ])
-#   resultado <- shapiro.test(fila)
-#   d[i] <- resultado$p.value
-# }
-# num_valores_menor_0_05 <- sum(d < 0.05)
-# 
-# print(num_valores_menor_0_05)
-
-
-#T-student 
-
-p_valor_controles <- c()
-for (i in 1:nrow(tabla_experimento_3TG_normalizado_numeros)) {
-  valores_3TG<- as.numeric(tabla_experimento_3TG_normalizado_numeros[i, ])
-  valores_controles <- as.numeric(tabla_control_3TG_normalizado_numeros[i, ])
-  resultado_t_test <- t.test(valores_3TG, valores_controles)
-  p_valor_controles<-c(p_valor_controles, resultado_t_test$p.value)
-}
-resultado_final_test<-data.frame(tabla_experimento_3TG[,1], p_value = p_valor_controles)
-resultado_final_test[is.na(resultado_final_test)]<-1
-
-num_valores_menor_0_05 <- sum(resultado_final_test[,2] < 0.05)
-
-print(num_valores_menor_0_05)
-
-#Calcular media y desviaciones típicas
-
-sumas <- rowSums(tabla_control_3TG_normalizado_numeros[,-(1:2)])
-suma_controles_n <- data.frame(Suma = sumas)
-a<-ncol(tabla_control_3TG)
-a<-a-2
-media_controles_n<-(suma_controles_n/a)
-
-sumas <- rowSums(tabla_experimento_3TG_normalizado_numeros[,-(1:2)])
-suma_3TG_n <- data.frame(Suma = sumas)
-b<-ncol(tabla_experimento_3TG)
-b<-b-2
-media_3TG_n<-(suma_3TG_n/b)
-
-
-
-cociente<-media_3TG_n/media_controles_n
+cociente<-tabla_experimento_3TG_datos$media / tabla_control_3TG_datos$media
+cociente<-data.frame(cociente)
 log2cociente<-apply(cociente, 1, log2)
 log2cociente<-data_frame(log2cociente)
 
-p_valor_controles<-data_frame(p_valor_controles)
-log10pvalor<-apply(p_valor_controles, 1, log10)
+p_valor_test<-data_frame(p_valor_test)
+log10pvalor<-apply(p_valor_test, 1, log10)
 log10pvalor<-data_frame(log10pvalor)
 log10pvalor<-apply(log10pvalor, 1, function(x) -x)
 log10pvalor<-data_frame(log10pvalor)
 
 
-vulcanot<-data_frame(tabla_control_3TG[,1:2], log2cociente, log10pvalor)
+vulcanot<-data_frame(ind, log2cociente, log10pvalor)
 
 
-# ggplot(vulcanot, aes(x = log2cociente, y = log10pvalor)) +
-#   geom_point() +
-#   geom_vline(xintercept = -1, linetype = "dashed", color = "green") +
-#   geom_vline(xintercept = 1, linetype = "dashed", color = "green") +
-#   geom_hline(yintercept = 1.9999999999999996, linetype = "dashed", color = "red") +  
-#   labs(
-#     title = "Vulcano plot 3TG/controles",
-#     x = "Log2 Fold Change",
-#     y = "-log10(P-Value)"
-#   )
 
-########################################################################################################################
-########################################################################################################################
-#######################################################################################################################
-#voy a coger las 12 desreguladas según las x/y, extrayendola de los datos 
-#######################################################################################################################
-#########################################################################################################################
-#########################################################################################################################
+
 p_valor001<-1.9999999999999996
 
 
@@ -279,7 +224,6 @@ subset_desrreguladas<- subset(vulcanot, Accession %in% accession_values$Accessio
 ########################################################################################################################
 ########################################################################################################################
 #######################################################################################################################
-p_valor001<-1.9999999999999996
 sobrexpresadas<-filter(vulcanot, log2cociente>1 & log10pvalor>p_valor001)
 subexpresadas<-filter(vulcanot, log2cociente<(-1) & log10pvalor>p_valor001)
 resto<-anti_join(vulcanot, sobrexpresadas) %>% anti_join(subexpresadas)
@@ -306,7 +250,7 @@ ggplot() +
   
   
   labs(
-    title = "Vulcano plot 3TG/controles",
+    title = "Vulcano plot 3TG/control",
     x = bquote(log[2](Fold_Change)),
     y =  bquote(-log[10](pvalue)),
     color = "Estado"
@@ -318,7 +262,3 @@ ggplot() +
         axis.text = element_text(color = "black"),  # Color del texto de los ejes
         axis.title = element_text(color = "black")  # Color de los títulos de los ejes
   )
-# 
-# write.xlsx(sobrexpresadas, "proteomica/ejercicio/3TG/sobrexpresadas.xlsx", sheetName = "sobrexpresadas", rowNames = FALSE, append = FALSE)
-# 
-# write.xlsx(subexpresadas, "proteomica/ejercicio/3TG/subexpresadas.xlsx", sheetName = "subexpresadas", rowNames = FALSE, append = FALSE)
