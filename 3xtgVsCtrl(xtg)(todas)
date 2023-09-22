@@ -1,4 +1,5 @@
 
+
 library(readxl)
 library(data.table)
 #library(ggpubr)
@@ -18,14 +19,18 @@ options(scipen = 999)
 
 entera_3TG <- read_excel("proteomica/ejercicio/3-TG/230414-LFQ_Filtradas.xlsx")
 
-
+df_3TG<-entera_3TG
 
 #cojo la tabla grande y la modifico para quedarme solo con el nombre del gen y el código de acceso, adicionalmente añado un subfijo a la tabla para poder
 #tablar cómodamente cuando utilice las tablas con el otro modelo 
-accesion_3TG<-select(entera_3TG, Accession)
-gene_ID_3TG<-select(entera_3TG, "Gene Symbol")
-df_3TG<-entera_3TG
-abundancias_3TG<-df_3TG[,140:158]
+accesion_3TG<-select(df_3TG, Accession)
+gene_ID_3TG<-select(df_3TG, "Gene Symbol")
+
+
+colnam<-colnames(entera_3TG)
+indices <- grep("Normalized)", colnam)
+
+abundancias_3TG<-df_3TG[, indices]
 abundancias_3TG[is.na(abundancias_3TG)] <- 0
 colnam<-colnames(abundancias_3TG)
 colnam <- gsub(".*F(\\d+).*", "\\1", colnam)
@@ -70,6 +75,7 @@ prot_control_3TG <- sample_metadata_3TG %>%
 
 tabla_control_3TG <- df_3TG %>%
   select(1, 2, all_of(prot_control_3TG))
+tabla_control_3TG_numeros<-tabla_control_3TG[,-(1:2)]
 
 prot_experimento_3TG <- sample_metadata_3TG %>%
   filter(experiment == "3xTg") %>%
@@ -77,6 +83,7 @@ prot_experimento_3TG <- sample_metadata_3TG %>%
 
 tabla_experimento_3TG <- df_3TG %>%
   select(1, 2, all_of(prot_experimento_3TG))
+tabla_experimento_3TG_numeros<-tabla_experimento_3TG[,-(1:2)]
 
 
 tabla_experimento_3TG <- tabla_experimento_3TG %>%
@@ -262,3 +269,4 @@ ggplot() +
         axis.text = element_text(color = "black"),  # Color del texto de los ejes
         axis.title = element_text(color = "black")  # Color de los títulos de los ejes
   )
+#total sobreexpresadas 4 y subexpresadas 11 total 15. 
